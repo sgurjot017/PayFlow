@@ -1,1 +1,13 @@
-.gitignore
+.gradle/
+.idea/
+.DS_Store
+local.properties
+gradle.properties
+**/.env
+!**/.env.example
+*.keystore
+*.jks
+build/
+**/build/
+*.iml
+.kotlin/

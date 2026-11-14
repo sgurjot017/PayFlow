@@ -1,0 +1,10 @@
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/payflow_launcher_background" />
+    <item>
+        <scale
+            android:drawable="@drawable/payflow_launcher_foreground"
+            android:scaleWidth="76%"
+            android:scaleHeight="76%"
+            android:scaleGravity="center" />
+    </item>
+</layer-list>
