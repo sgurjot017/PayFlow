@@ -45,9 +45,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.Lifecycle
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
@@ -250,25 +252,32 @@ private fun CheckoutScreen(viewModel: CheckoutViewModel, stripeConfigured: Boole
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
-                    Text("Order #${state.order.id}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Text("Order #${state.order.id.toDisplayReference()}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
                 }
             }
         }
         item {
-            Card(shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Payment status", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        StatusDot(status)
-                        Text(status?.displayName() ?: "Ready to checkout", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-                    }
-                    Text(
-                        status?.statusDescription() ?: "Your payment details are handled securely by Stripe. PayFlow never stores card numbers.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    attempt?.let {
-                        Text("Provider · ${it.provider.replaceFirstChar(Char::uppercase)}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (status == PaymentStatus.SUCCEEDED && attempt != null) {
+                PaymentConfirmationCard(
+                    amount = formatAmount(attempt.amountMinor, attempt.currency),
+                    orderReference = attempt.orderId.toDisplayReference(),
+                )
+            } else {
+                Card(shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("Payment status", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            StatusDot(status)
+                            Text(status?.displayName() ?: "Ready to checkout", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                        }
+                        Text(
+                            status?.statusDescription() ?: "Your payment details are handled securely by Stripe. PayFlow never stores card numbers.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        attempt?.let {
+                            Text("Provider · ${it.provider.replaceFirstChar(Char::uppercase)}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
             }
@@ -285,27 +294,28 @@ private fun CheckoutScreen(viewModel: CheckoutViewModel, stripeConfigured: Boole
         }
         item {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(
-                    onClick = {
-                        if (canPay) viewModel.startPayment() else viewModel.checkPaymentStatus()
-                    },
-                    enabled = stripeConfigured && !state.isLoading && status != PaymentStatus.SUCCEEDED,
-                    modifier = Modifier.fillMaxWidth().height(54.dp),
-                    shape = RoundedCornerShape(16.dp),
-                ) {
-                    if (state.isLoading) {
-                        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                    } else {
-                        Text(
-                            when {
-                                status == PaymentStatus.SUCCEEDED -> "Payment complete"
-                                status == PaymentStatus.FAILED || status == PaymentStatus.CANCELLED -> "Try payment again"
-                                status == PaymentStatus.REQUIRES_ACTION || status == PaymentStatus.REQUIRES_PAYMENT_METHOD -> "Continue checkout"
-                                status == null -> "Continue to payment"
-                                else -> "Refresh payment status"
-                            },
-                            style = MaterialTheme.typography.titleSmall,
-                        )
+                if (status != PaymentStatus.SUCCEEDED) {
+                    Button(
+                        onClick = {
+                            if (canPay) viewModel.startPayment() else viewModel.checkPaymentStatus()
+                        },
+                        enabled = stripeConfigured && !state.isLoading,
+                        modifier = Modifier.fillMaxWidth().height(54.dp),
+                        shape = RoundedCornerShape(16.dp),
+                    ) {
+                        if (state.isLoading) {
+                            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                        } else {
+                            Text(
+                                when {
+                                    status == PaymentStatus.FAILED || status == PaymentStatus.CANCELLED -> "Try payment again"
+                                    status == PaymentStatus.REQUIRES_ACTION || status == PaymentStatus.REQUIRES_PAYMENT_METHOD -> "Continue checkout"
+                                    status == null -> "Continue to payment"
+                                    else -> "Refresh payment status"
+                                },
+                                style = MaterialTheme.typography.titleSmall,
+                            )
+                        }
                     }
                 }
                 if (status == PaymentStatus.SUCCEEDED) {
@@ -387,37 +397,98 @@ private fun EmptyHistory(message: String?) {
 }
 
 @Composable
-private fun TransactionCard(attempt: PaymentAttempt) {
-    Card(shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+private fun PaymentConfirmationCard(amount: String, orderReference: String) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+        shape = RoundedCornerShape(22.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
         Row(
-            Modifier.fillMaxWidth().padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(20.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.Top,
         ) {
-            StatusDot(attempt.status)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(attempt.orderId, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Icon(
+                imageVector = Icons.Filled.CheckCircle,
+                contentDescription = "Payment confirmed",
+                modifier = Modifier.size(30.dp),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text("Payment confirmed", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(amount, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text("Order #$orderReference", style = MaterialTheme.typography.labelLarge)
                 Text(
-                    DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(attempt.createdAtEpochMillis)),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    "Stripe confirmed this payment. You can start another demo order whenever you’re ready.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
-                Text(attempt.status.displayName(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Text(formatAmount(attempt.amountMinor, attempt.currency), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
         }
     }
 }
 
 @Composable
-private fun StatusDot(status: PaymentStatus?) {
+private fun TransactionCard(attempt: PaymentAttempt) {
+    Card(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Order #${attempt.orderId.toDisplayReference()}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(attempt.createdAtEpochMillis)),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Text(formatAmount(attempt.amountMinor, attempt.currency), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            }
+            PaymentStatusBadge(attempt.status)
+        }
+    }
+}
+
+@Composable
+private fun PaymentStatusBadge(status: PaymentStatus) {
+    val (containerColor, contentColor) = when (status) {
+        PaymentStatus.SUCCEEDED -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
+        PaymentStatus.FAILED, PaymentStatus.CANCELLED -> MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
+        PaymentStatus.INITIATING, PaymentStatus.PROCESSING, PaymentStatus.TIMED_OUT -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
+        else -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Surface(color = containerColor, contentColor = contentColor, shape = CircleShape) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            StatusDot(status, diameter = 7.dp)
+            Text(status.displayName(), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium)
+        }
+    }
+}
+
+private fun String.toDisplayReference(): String {
+    val reference = removePrefix("demo-order-")
+    return if (reference.length > 14) "${reference.take(8)}…${reference.takeLast(4)}" else reference
+}
+
+@Composable
+private fun StatusDot(status: PaymentStatus?, diameter: Dp = 12.dp) {
     val color = when (status) {
         PaymentStatus.SUCCEEDED -> MaterialTheme.colorScheme.primary
         PaymentStatus.FAILED, PaymentStatus.CANCELLED -> MaterialTheme.colorScheme.error
         PaymentStatus.PROCESSING, PaymentStatus.INITIATING, PaymentStatus.TIMED_OUT -> MaterialTheme.colorScheme.tertiary
         else -> MaterialTheme.colorScheme.outline
     }
-    Surface(modifier = Modifier.size(12.dp), shape = CircleShape, color = color, content = {})
+    Surface(modifier = Modifier.size(diameter), shape = CircleShape, color = color, content = {})
 }
 
 @Composable

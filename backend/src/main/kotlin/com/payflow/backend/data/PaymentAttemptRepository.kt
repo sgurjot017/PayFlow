@@ -44,6 +44,15 @@ class PaymentAttemptRepository(private val dataSource: HikariDataSource) {
                         connection.rollback()
                         return ReserveAttemptResult.OrderNotFound
                     }
+
+                // Another request with this key may have committed while this transaction waited
+                // for the order lock. Recheck before interpreting its active attempt as a conflict.
+                findByIdempotency(connection, ownerId, idempotencyKey)?.let { existing ->
+                    connection.commit()
+                    if (existing.orderId != orderId) return ReserveAttemptResult.IdempotencyConflict
+                    return ReserveAttemptResult.Existing(order, existing)
+                }
+
                 if (order.status != OrderStatus.PAYABLE) {
                     connection.rollback()
                     return ReserveAttemptResult.OrderNotPayable

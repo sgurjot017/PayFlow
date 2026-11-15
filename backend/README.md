@@ -8,7 +8,7 @@ Ktor service for authenticated payment initiation, Stripe PaymentIntent creation
 2. Start the webhook forwarder and copy its signing secret into `STRIPE_WEBHOOK_SECRET` in `.env`:
 
    ```sh
-   stripe listen --forward-to localhost:8082/v1/webhooks/stripe
+   stripe listen --forward-to localhost:8080/v1/webhooks/stripe
    ```
 
 3. Generate a local-only bearer token and put the same value in `PAYFLOW_DEV_BEARER_TOKEN` in `backend/.env` and `PAYFLOW_DEV_BEARER_TOKEN` in `~/.gradle/gradle.properties`:
@@ -24,7 +24,9 @@ Ktor service for authenticated payment initiation, Stripe PaymentIntent creation
    ./backend/run-local.sh
    ```
 
-Flyway creates the payment tables and inserts a demo order only when `PAYFLOW_ENV=local`. For Android emulator testing, set `PAYFLOW_API_BASE_URL=http://10.0.2.2:8082/` in `~/.gradle/gradle.properties`. Cleartext is allowed only for that host bridge in the debug variant; the release variant and backend deployment require TLS. The local bearer token is debug-only and release builds do not embed it. `run-local.sh` reads dotenv values without evaluating them as shell code or echoing them.
+Flyway creates the payment tables and inserts a demo order only when `PAYFLOW_ENV=local`. The backend listens on port `8080` by default (`PAYFLOW_PORT`). For Android emulator testing, set `PAYFLOW_API_BASE_URL=http://10.0.2.2:8080/` in `~/.gradle/gradle.properties`; Stripe CLI forwards webhook events to `localhost:8080`. Keep these port settings aligned if you change the backend port. Cleartext is allowed only for that host bridge in the debug variant; the release variant and backend deployment require TLS. The local bearer token is debug-only and release builds do not embed it. `run-local.sh` reads dotenv values without evaluating them as shell code or echoing them.
+
+For PostgreSQL-backed integration tests, set `PAYFLOW_TEST_DATABASE_URL`, `PAYFLOW_TEST_DATABASE_USER`, and `PAYFLOW_TEST_DATABASE_PASSWORD`. The GitHub Actions workflow starts PostgreSQL automatically; without `PAYFLOW_TEST_DATABASE_URL`, the integration test class is skipped locally.
 
 ## Production configuration
 
